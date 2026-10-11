@@ -140,7 +140,11 @@ export async function maybeReply(sock, raw, message) {
     return;
   }
 
-  if (!keywordRegex.test(message.text) || alreadyHandled(message.id)) {
+  // A palavra-chave vale tanto no texto quanto no nome de quem enviou.
+  const matches = keywordRegex.test(message.text)
+    || keywordRegex.test(message.sender_name || "");
+
+  if (!matches || alreadyHandled(message.id)) {
     return;
   }
 
