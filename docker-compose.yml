@@ -1,0 +1,13 @@
+services:
+  ssentinel:
+    container_name: ssentinel
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8082"
+    env_file:
+      - .env
+    environment:
+      - WHATSAPP_AUTH_PATH=/app/data/auth
+    volumes:
+      - ./data/auth:/app/data/auth
