@@ -6,12 +6,23 @@ import { recentTextMessages } from "./store.js";
 // Casa qualquer uma das palavras-chave, só como palavra inteira ("ssentinel" sim,
 // "ssentinelx" não), sem diferenciar maiúsculas. O replace escapa caracteres
 // especiais de regex e o "|" une as palavras (basta uma aparecer).
-const keywordRegex = new RegExp(
-  `(?<![\\p{L}\\p{N}_])(?:${config.aiKeywords
-    .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("|")})(?![\\p{L}\\p{N}_])`,
-  "iu",
-);
+const keywordPattern = `(?<![\\p{L}\\p{N}_])(?:${config.aiKeywords
+  .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|")})(?![\\p{L}\\p{N}_])`;
+const keywordRegex = new RegExp(keywordPattern, "iu");
+// Versão global, usada para remover as palavras-chave do texto.
+const keywordStripRegex = new RegExp(keywordPattern, "giu");
+
+// Marcador que o preprompt manda o modelo responder quando a mensagem não tem contexto.
+const IGNORE_MARKER = "[IGNORE]";
+
+/**
+ * Conta as palavras que sobram na mensagem depois de tirar as palavras-chave.
+ * Pontuação e emojis não contam.
+ */
+function meaningfulWordCount(text) {
+  return (text.replace(keywordStripRegex, " ").match(/[\p{L}\p{N}]+/gu) ?? []).length;
+}
 
 // IDs das últimas mensagens já respondidas (o WhatsApp pode reentregar o mesmo evento).
 const handledIds = new Set();
@@ -61,11 +72,11 @@ function rateLimited() {
 }
 
 /**
- * Chama a API REST do Gemini. O preprompt vai como instrução de sistema
+ * Chama a API REST da IA. O preprompt vai como instrução de sistema
  * e o texto do grupo como mensagem do usuário. Retorna o texto da resposta.
  */
-async function askGemini(preprompt, text) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModel}:generateContent`;
+async function askAI(preprompt, text) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.aiModel}:generateContent`;
 
   const body = {
     contents: [{ role: "user", parts: [{ text }] }],
@@ -80,14 +91,14 @@ async function askGemini(preprompt, text) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-goog-api-key": config.geminiApiKey,
+      "x-goog-api-key": config.aiApiKey,
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
-    throw new Error(`Gemini respondeu ${response.status}: ${await response.text()}`);
+    throw new Error(`IA respondeu ${response.status}: ${await response.text()}`);
   }
 
   const data = await response.json();
@@ -107,7 +118,7 @@ function formatLine(message) {
 }
 
 /**
- * Monta o texto enviado ao Gemini: as últimas mensagens do grupo como contexto
+ * Monta o texto enviado à IA: as últimas mensagens do grupo como contexto
  * (se houver) seguidas da mensagem que ativou a palavra-chave.
  */
 function buildPrompt(message) {
@@ -131,12 +142,12 @@ function buildPrompt(message) {
 }
 
 /**
- * Se a mensagem do grupo contém a palavra-chave, pergunta ao Gemini e
+ * Se a mensagem do grupo contém a palavra-chave, pergunta à IA e
  * responde no grupo (citando a mensagem original). Nada é guardado.
  */
 export async function maybeReply(sock, raw, message) {
   // Sem chave ou sem texto: nada a fazer.
-  if (!config.geminiApiKey || !message.text) {
+  if (!config.aiApiKey || !message.text) {
     return;
   }
 
@@ -145,6 +156,11 @@ export async function maybeReply(sock, raw, message) {
     || keywordRegex.test(message.sender_name || "");
 
   if (!matches || alreadyHandled(message.id)) {
+    return;
+  }
+
+  // Só a palavra-chave (ou quase nada além dela): sem contexto, nem chama a IA.
+  if (meaningfulWordCount(message.text) < config.aiMinWords) {
     return;
   }
 
@@ -168,10 +184,15 @@ export async function maybeReply(sock, raw, message) {
   const prompt = buildPrompt(message);
 
   try {
-    const answer = await askGemini(config.preprompt, prompt);
+    const answer = await askAI(config.preprompt, prompt);
 
     if (!answer) {
-      console.warn("Gemini respondeu sem texto (possível bloqueio de conteúdo); nada enviado.");
+      console.warn("IA respondeu sem texto (possível bloqueio de conteúdo); nada enviado.");
+      return;
+    }
+
+    // O preprompt manda responder [IGNORE] quando a mensagem não tem contexto real.
+    if (answer.includes(IGNORE_MARKER)) {
       return;
     }
 

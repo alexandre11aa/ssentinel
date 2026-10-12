@@ -16,17 +16,19 @@ export const config = {
   bufferSize: Number(process.env.MESSAGE_BUFFER_SIZE || 500),
   logLevel: process.env.LOG_LEVEL || "warn",
 
-  // --- IA (Gemini) ---
+  // --- IA ---
   // Sem chave, a resposta automática fica desligada.
-  geminiApiKey: process.env.GEMINI_API_KEY || "",
-  geminiModel: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+  aiApiKey: process.env.AI_API_KEY || "",
+  aiModel: process.env.AI_MODEL || "",
   // Palavras que disparam a IA (basta uma delas), separadas por vírgula.
   aiKeywords: (process.env.AI_KEYWORDS || "ssentinel")
     .split(",")
     .map((word) => word.trim())
     .filter(Boolean),
-  // Preprompt: instruções enviadas ao Gemini junto da mensagem do grupo.
+  // Preprompt: instruções enviadas à IA junto da mensagem do grupo.
   preprompt: (process.env.PREPROMPT || "").trim(),
+  // Mínimo de palavras (além da palavra-chave) para a IA ser chamada.
+  aiMinWords: Number(process.env.AI_MIN_WORDS ?? 3),
   // Quantas mensagens de texto anteriores à palavra-chave vão como contexto (0 = nenhuma).
   aiContextMessages: Number(process.env.AI_CONTEXT_MESSAGES ?? 5),
   // Modo debug: true = a IA também responde às mensagens do próprio número do bot.
