@@ -193,6 +193,7 @@ export async function maybeReply(sock, raw, message) {
 
     // O preprompt manda responder [IGNORE] quando a mensagem não tem contexto real.
     if (answer.includes(IGNORE_MARKER)) {
+      console.log(`[${message.group_jid}] IA ignorou a mensagem de ${message.sender_name || message.sender} ([IGNORE]).`);
       return;
     }
 
@@ -206,6 +207,7 @@ export async function maybeReply(sock, raw, message) {
 
     // `quoted` faz o WhatsApp mostrar a resposta como reply da mensagem original.
     await sock.sendMessage(message.group_jid, { text: answer }, { quoted: raw, messageId });
+    console.log(`[${message.group_jid}] IA (resposta a ${message.sender_name || message.sender}): ${answer}`);
   } catch (error) {
     // Falha da IA não derruba o handler nem manda erro ao grupo.
     console.error("Erro ao responder com a IA:", error.message);

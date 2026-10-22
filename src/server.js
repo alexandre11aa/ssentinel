@@ -121,6 +121,7 @@ app.post(
 
     try {
       const result = await getSocket().sendMessage(config.groupJid, { text });
+      console.log(`[${config.groupJid}] Enviado via API: ${text}`);
 
       return response.json({ status: "sent", message_id: result?.key?.id || null });
     } catch (error) {
@@ -156,6 +157,7 @@ app.post(
 
     try {
       const result = await getSocket().sendMessage(config.groupJid, { image, caption });
+      console.log(`[${config.groupJid}] Enviado via API: <imageMessage>${caption ? ` ${caption}` : ""}`);
 
       return response.json({ status: "sent", message_id: result?.key?.id || null });
     } catch (error) {
